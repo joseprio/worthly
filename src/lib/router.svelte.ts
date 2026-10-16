@@ -1,14 +1,8 @@
 // Hash routing keeps deep links working on GitHub Pages, which has no SPA fallback.
-export type Route =
-  | { name: "overview" }
-  | { name: "progression" }
-  | { name: "items" }
-  | { name: "item"; id: string };
+export type Route = { name: "overview" } | { name: "item"; id: string };
 
 const parse = (hash: string): Route => {
   const [name, id] = hash.replace(/^#\/?/, "").split("/");
-  if (name == "progression") return { name };
-  if (name == "items") return { name };
   if (name == "item" && id) return { name, id };
   return { name: "overview" };
 };

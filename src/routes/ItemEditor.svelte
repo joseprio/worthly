@@ -25,7 +25,7 @@
     type Snapshot,
   } from "../lib/model";
   import { dateLong, money } from "../lib/format";
-  import { back, go } from "../lib/router.svelte";
+  import { back } from "../lib/router.svelte";
   import { blankItem, deleteItem, getItem, saveItem } from "../lib/store.svelte";
 
   let { id }: { id: string } = $props();
@@ -80,14 +80,13 @@
       snapshots: sortedSnapshots({ snapshots } as Item),
     });
     snackbar(isNew ? "Item added" : "Changes saved");
-    if (isNew) go("items");
-    else back("items");
+    back("");
   };
 
   const remove = () => {
     const removed = getItem(start.id);
     deleteItem(start.id);
-    go("items");
+    back("");
     if (removed)
       snackbar("Item deleted", { Undo: () => saveItem(removed) }, false, 6000);
   };
@@ -127,7 +126,7 @@
   ];
 </script>
 
-<TopAppBar title={isNew ? "New item" : name || "Edit item"} onback={() => back("items")}>
+<TopAppBar title={isNew ? "New item" : name || "Edit item"} onback={() => back("")}>
   {#snippet actions()}
     {#if !isNew}
       <Button variant="text" iconType="full" onclick={remove} aria-label="Delete item">
@@ -236,7 +235,7 @@
   </section>
 
   <div class="actions">
-    <Button variant="text" onclick={() => back("items")}>Cancel</Button>
+    <Button variant="text" onclick={() => back("")}>Cancel</Button>
     <Button variant="filled" type="submit">{isNew ? "Add item" : "Save"}</Button>
   </div>
 </form>

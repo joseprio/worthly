@@ -8,6 +8,10 @@
   --m3-font: "Google Sans Flex Variable", system-ui, sans-serif;
   background-color: var(--m3c-surface);
   color: var(--m3c-on-surface);
+  /* Chart colours for assets and debts, validated for contrast and colour-blind
+     separation on surface-container in both modes. */
+  --viz-asset: light-dark(#008300, #008300);
+  --viz-debt: light-dark(#e34948, #e66767);
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;

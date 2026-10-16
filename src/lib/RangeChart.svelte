@@ -74,6 +74,7 @@
     onpointermove={onmove}
     onpointerdown={onmove}
     onpointerleave={() => (hover = undefined)}
+    onpointercancel={() => (hover = undefined)}
   >
     {#each ticks as t (t)}
       <line class="grid" class:zero={t == 0} x1={pad.left} x2={width - pad.right} y1={y(t)} y2={y(t)} />
@@ -123,7 +124,6 @@
   .chart {
     position: relative;
     width: 100%;
-    touch-action: pan-y;
     user-select: none;
   }
   svg {
