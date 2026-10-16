@@ -28,3 +28,8 @@ range (or interest rate, for debts) and an optional monthly contribution or repa
 an item is projected from its most recent known value, compounding monthly at the lowest and highest
 rates. Net worth low = lowest assets − highest debts; high = highest assets − lowest debts. Data is
 stored only on the device (localStorage).
+
+Mortgages with a term end date work like a UK lender: interest is charged at rate ÷ 12 each month,
+and on a repayment mortgage the payment is recalculated from the latest known balance so it is paid
+off exactly at the term end at any rate (overpayments clear it sooner). Interest-only balances stay
+flat, reduced only by overpayments. Without a term end, the entered monthly repayment is used as is.

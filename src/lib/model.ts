@@ -40,6 +40,17 @@ export type Item = {
   growthMax: number;
   /** Paid in each month (assets) or repaid each month (liabilities), in pounds. */
   monthly: number;
+  /** Mortgage terms. When set, the repayment is worked out from these and `monthly` is unused. */
+  mortgage?: Mortgage;
+};
+
+export type RepaymentType = "repayment" | "interest-only";
+export type Mortgage = {
+  type: RepaymentType;
+  /** Last day of the mortgage term (ISO yyyy-mm-dd). */
+  termEnd: string;
+  /** Paid each month on top of the required payment, in pounds. */
+  overpayment: number;
 };
 
 export type Range = { low: number; high: number };
@@ -58,8 +69,16 @@ export const sortedSnapshots = (item: Item) =>
  * Compounds `value` monthly at an annual rate over `months`, adding `monthly` each month.
  * Uses the closed form so fractional months work.
  */
-const grow = (value: number, annualPct: number, monthly: number, months: number) => {
-  const r = Math.pow(1 + annualPct / 100, 1 / 12) - 1;
+const monthlyRate = (annualPct: number) => Math.pow(1 + annualPct / 100, 1 / 12) - 1;
+export const monthsBetween = (from: string, to: string) =>
+  ((parseDate(to) - parseDate(from)) / DAY) * MONTHS_PER_DAY;
+
+// UK lenders quote a nominal annual rate and charge a twelfth of it each month.
+const mortgageRate = (annualPct: number) => annualPct / 100 / 12;
+
+const grow = (value: number, annualPct: number, monthly: number, months: number) =>
+  growAt(value, monthlyRate(annualPct), monthly, months);
+const growAt = (value: number, r: number, monthly: number, months: number) => {
   const factor = Math.pow(1 + r, months);
   const contributions = r == 0 ? monthly * months : (monthly * (factor - 1)) / r;
   return value * factor + contributions;
@@ -70,6 +89,37 @@ const grow = (value: number, annualPct: number, monthly: number, months: number)
  * projects forward from the latest earlier snapshot. Before the first snapshot the
  * item is treated as not existing. Liabilities are returned as positive balances.
  */
+/**
+ * Required monthly payment: on a repayment mortgage, the amount that clears `balance` over
+ * `months` at the rate (as UK lenders recalculate it when a rate changes); on interest-only,
+ * just the interest.
+ */
+export const mortgagePayment = (
+  balance: number,
+  annualPct: number,
+  months: number,
+  type: RepaymentType,
+) => {
+  const r = mortgageRate(annualPct);
+  if (type == "interest-only") return balance * r;
+  if (months <= 0) return 0;
+  return r == 0 ? balance / months : (balance * r) / (1 - Math.pow(1 + r, -months));
+};
+
+/** Mortgage balance on `date`, starting from a known balance on `from`. */
+const mortgageBalance = (m: Mortgage, balance: number, annualPct: number, from: string, date: string) => {
+  const elapsed = Math.max(0, monthsBetween(from, date));
+  const remaining = monthsBetween(from, m.termEnd);
+  if (m.type == "interest-only") {
+    // Interest is paid as it accrues; only overpayments reduce the balance, which stays
+    // due in full at the end of the term.
+    return Math.max(0, balance - m.overpayment * Math.min(elapsed, Math.max(0, remaining)));
+  }
+  if (remaining <= 0 || elapsed >= remaining) return 0;
+  const payment = mortgagePayment(balance, annualPct, remaining, "repayment") + m.overpayment;
+  return Math.max(0, growAt(balance, mortgageRate(annualPct), -payment, elapsed));
+};
+
 export const itemRange = (item: Item, date: string): Range | undefined => {
   const snaps = sortedSnapshots(item);
   let base: Snapshot | undefined;
@@ -83,6 +133,11 @@ export const itemRange = (item: Item, date: string): Range | undefined => {
   if (item.kind == "asset") {
     const a = grow(base.value, item.growthMin, item.monthly, months);
     const b = grow(base.value, item.growthMax, item.monthly, months);
+    return { low: Math.min(a, b), high: Math.max(a, b) };
+  }
+  if (item.mortgage) {
+    const a = mortgageBalance(item.mortgage, base.value, item.growthMin, base.date, date);
+    const b = mortgageBalance(item.mortgage, base.value, item.growthMax, base.date, date);
     return { low: Math.min(a, b), high: Math.max(a, b) };
   }
   // Liabilities: interest grows the balance, repayments shrink it; never below zero.

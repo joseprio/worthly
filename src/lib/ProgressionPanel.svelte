@@ -1,11 +1,32 @@
 <script lang="ts">
   import { Button, ConnectedButtons } from "m3-svelte";
-  import RangeChart from "./RangeChart.svelte";
-  import { earliestSnapshot, netWorthSeries, parseDate, toIso, type Item } from "./model";
+  import RangeChart, { type Focus } from "./RangeChart.svelte";
+  import {
+    categories,
+    earliestSnapshot,
+    itemRange,
+    netWorthSeries,
+    parseDate,
+    toIso,
+    type Item,
+  } from "./model";
   import { dateMonthYear, formatRange } from "./format";
 
-  let { items, today, title = "Progression" }: { items: Item[]; today: string; title?: string } =
-    $props();
+  let {
+    items,
+    today,
+    title = "Progression",
+    label = "Net worth",
+    active,
+  }: {
+    items: Item[];
+    today: string;
+    title?: string;
+    /** What the overall series is, e.g. "Net worth" or "Assets". */
+    label?: string;
+    /** Item to draw on top of the overall series. */
+    active?: string;
+  } = $props();
 
   const horizons = [
     { value: "0", text: "To today" },
@@ -24,12 +45,35 @@
   const points = $derived(from && from < to ? netWorthSeries(items, from, to, 80) : []);
   // A coarser set of rows for the screen-reader table.
   const rows = $derived(from && from < to ? netWorthSeries(items, from, to, 13) : []);
+
+  const focused = $derived(items.find((i) => i.id == active));
+  // The item on the same dates as the overall series; debts are negative, as in net worth.
+  const focus = $derived.by((): Focus | undefined => {
+    if (!focused) return undefined;
+    const item = focused;
+    const sign = item.kind == "asset" ? 1 : -1;
+    return {
+      label: item.name || categories[item.category].label,
+      kind: item.kind,
+      points: points.map((p) => {
+        const r = itemRange(item, p.date);
+        if (!r) return undefined;
+        const [a, b] = [r.low * sign, r.high * sign];
+        return { date: p.date, low: Math.min(a, b), high: Math.max(a, b) };
+      }),
+    };
+  });
 </script>
 
 <div class="panel">
   <div class="head">
     <h2>{title}</h2>
-    <p class="sub">Shaded area: lowest to highest growth.</p>
+    {#if focus}
+      <div class="legend" aria-hidden="true">
+        <span class="key {focus.kind}">{focus.label}</span>
+        <span class="key overall">{label}</span>
+      </div>
+    {/if}
   </div>
 
   <div class="horizons">
@@ -50,7 +94,7 @@
         : "None of these items has a known value yet."}
     </p>
   {:else}
-    <RangeChart {points} {today} />
+    <RangeChart {points} {today} {label} {focus} />
     <table class="sr-only">
       <caption>{title}: estimated range over time</caption>
       <thead>
@@ -72,12 +116,47 @@
     gap: 0.75rem;
     min-width: 0;
   }
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25rem 1rem;
+    min-height: 1.5rem;
+  }
   h2 {
     @apply --m3-title-medium;
   }
-  .sub {
-    @apply --m3-body-small;
+  .legend {
+    display: flex;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+  .key {
+    @apply --m3-label-medium;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
     color: var(--m3c-on-surface-variant);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .key::before {
+    content: "";
+    flex-shrink: 0;
+    width: 0.75rem;
+    height: 0.25rem;
+    border-radius: var(--m3-shape-full);
+  }
+  .key.asset::before {
+    background-color: var(--viz-asset);
+  }
+  .key.liability::before {
+    background-color: var(--viz-debt);
+  }
+  .key.overall::before {
+    background-color: --translucent(var(--m3c-on-surface-variant), 0.55);
   }
   .horizons {
     display: flex;

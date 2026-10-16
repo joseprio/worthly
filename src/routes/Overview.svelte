@@ -63,100 +63,110 @@
 </script>
 
 <div class="page">
-  {#if hasValues}
-    <section class="hero" aria-roledescription="carousel" aria-label="Net worth">
-      <div class="pager" bind:this={pager} {onscroll}>
-        <div class="slide" role="group" aria-roledescription="slide" aria-label="Net worth today">
-          <NetWorthDonut
-            assets={segments.asset}
-            liabilities={segments.liability}
-            low={range.low}
-            high={range.high}
-            {caption}
-            date={today}
-            bind:active
-          />
+  <div class="side">
+    {#if hasValues}
+      <section class="hero" aria-roledescription="carousel" aria-label="Net worth">
+        <div class="pager" bind:this={pager} {onscroll}>
+          <div class="slide" role="group" aria-roledescription="slide" aria-label="Net worth today">
+            <NetWorthDonut
+              assets={segments.asset}
+              liabilities={segments.liability}
+              low={range.low}
+              high={range.high}
+              {caption}
+              date={today}
+              bind:active
+            />
+          </div>
+          <div class="slide" role="group" aria-roledescription="slide" aria-label="Progression">
+            <ProgressionPanel
+              items={shown}
+              {today}
+              title={filter == "all" ? "Progression" : `${caption} over time`}
+              label={caption}
+              {active}
+            />
+          </div>
         </div>
-        <div class="slide" role="group" aria-roledescription="slide" aria-label="Progression">
-          <ProgressionPanel items={shown} {today} title={filter == "all" ? "Progression" : `${caption} over time`} />
+        <div class="dots">
+          {#each pages as label, i (label)}
+            <button
+              type="button"
+              class="dot"
+              class:on={page == i}
+              aria-label={`Show ${label.toLowerCase()}`}
+              aria-current={page == i}
+              onclick={() => showPage(i)}
+            ></button>
+          {/each}
         </div>
-      </div>
-      <div class="dots">
-        {#each pages as label, i (label)}
-          <button
-            type="button"
-            class="dot"
-            class:on={page == i}
-            aria-label={`Show ${label.toLowerCase()}`}
-            aria-current={page == i}
-            onclick={() => showPage(i)}
-          ></button>
-        {/each}
-      </div>
-    </section>
-  {:else}
-    <section class="welcome">
-      <h2>Welcome to Worthly</h2>
-      <p>
-        Add your accounts, pensions and debts with a value you know. Worthly projects them forward
-        to estimate what you're worth today.
-      </p>
-      {#if store.items.length}
-        <p>Open an item below and add a known value to see your estimate.</p>
-      {:else}
-        <p>Tap <strong>Add item</strong> to get started.</p>
-      {/if}
-    </section>
-  {/if}
+      </section>
+    {:else}
+      <section class="welcome">
+        <h2>Welcome to Worthly</h2>
+        <p>
+          Add your accounts, pensions and debts with a value you know. Worthly projects them forward
+          to estimate what you're worth today.
+        </p>
+        {#if store.items.length}
+          <p>Open an item below and add a known value to see your estimate.</p>
+        {:else}
+          <p>Use <strong>Add item</strong> to get started.</p>
+        {/if}
+      </section>
+    {/if}
+  </div>
 
-  {#if store.items.length}
-    <div class="filters" role="radiogroup" aria-label="Show">
-      <ConnectedButtons>
-        {#each filters as f (f.value)}
-          <Button variant="tonal" size="s" label>
-            <input type="radio" name="filter" value={f.value} bind:group={filter} />
-            {f.text}
-          </Button>
-        {/each}
-      </ConnectedButtons>
-    </div>
-  {/if}
-
-  {#each groups as group (group.title)}
-    {#if group.items.length}
-      <h2 class="section">{group.title}</h2>
-      <div class="list">
-        {#each group.items as item (item.id)}
-          {@const r = itemRange(item, today)}
-          <ListItem
-            href={`#/item/${item.id}`}
-            headline={title(item)}
-            supporting={supporting(item)}
-            onpointerenter={() => r && (active = item.id)}
-            onpointerleave={() => (active = undefined)}
-            onfocus={() => r && (active = item.id)}
-            onblur={() => (active = undefined)}
-          >
-            {#snippet leading()}
-              <!-- Tinted with the donut's colours, so the list doubles as its legend. -->
-              <span class="legend {item.kind}" class:off={!r}>
-                <Icon icon={item.kind == "asset" ? iconAsset : iconDebt} />
-              </span>
-            {/snippet}
-            {#snippet trailing()}
-              {#if r}
-                <span class="amount" class:debt={item.kind == "liability"}>
-                  {item.kind == "liability" ? "−" : ""}{formatRange(r.low, r.high)}
-                </span>
-              {:else}
-                <span class="missing">No values yet</span>
-              {/if}
-            {/snippet}
-          </ListItem>
-        {/each}
+  <div class="main">
+    {#if store.items.length}
+      <div class="filters" role="radiogroup" aria-label="Show">
+        <ConnectedButtons>
+          {#each filters as f (f.value)}
+            <Button variant="tonal" size="s" label>
+              <input type="radio" name="filter" value={f.value} bind:group={filter} />
+              {f.text}
+            </Button>
+          {/each}
+        </ConnectedButtons>
       </div>
     {/if}
-  {/each}
+
+    {#each groups as group (group.title)}
+      {#if group.items.length}
+        <h2 class="section">{group.title}</h2>
+        <div class="list">
+          {#each group.items as item (item.id)}
+            {@const r = itemRange(item, today)}
+            <ListItem
+              onclick={() => go(`item/${item.id}`)}
+              headline={title(item)}
+              supporting={supporting(item)}
+              onpointerenter={() => r && (active = item.id)}
+              onpointerleave={() => (active = undefined)}
+              onfocus={() => r && (active = item.id)}
+              onblur={() => (active = undefined)}
+            >
+              {#snippet leading()}
+                <!-- Tinted with the donut's colours, so the list doubles as its legend. -->
+                <span class="legend {item.kind}" class:off={!r}>
+                  <Icon icon={item.kind == "asset" ? iconAsset : iconDebt} />
+                </span>
+              {/snippet}
+              {#snippet trailing()}
+                {#if r}
+                  <span class="amount" class:debt={item.kind == "liability"}>
+                    {item.kind == "liability" ? "−" : ""}{formatRange(r.low, r.high)}
+                  </span>
+                {:else}
+                  <span class="missing">No values yet</span>
+                {/if}
+              {/snippet}
+            </ListItem>
+          {/each}
+        </div>
+      {/if}
+    {/each}
+  </div>
 </div>
 
 <div class="fab">
@@ -164,10 +174,14 @@
 </div>
 
 <style>
-  .page {
+  .page,
+  .side,
+  .main {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
+  }
+  .page {
     /* No app bar on home, so clear the status bar ourselves. Bottom: room for the FAB. */
     padding: calc(env(safe-area-inset-top) + 1rem) 1rem 6rem;
   }
@@ -294,8 +308,41 @@
   }
   .fab {
     position: fixed;
-    right: max(1rem, calc((100vw - 40rem) / 2 + 1rem));
+    /* Follows the edge of the centred content (see .shell in App.svelte). */
+    right: max(1rem, calc((100vw - 72rem) / 2 + 1rem));
     bottom: calc(1rem + env(safe-area-inset-bottom));
     z-index: 1;
+  }
+
+  /* Expanded window class (Material 3: 840px+): charts on the left, list on the right. */
+  @media (min-width: 52.5rem) {
+    .page {
+      display: grid;
+      grid-template-columns: minmax(20rem, 26rem) minmax(0, 1fr);
+      align-items: start;
+      column-gap: 2rem;
+      padding: 1.5rem 1.5rem 6rem;
+    }
+    /* No swiping with a mouse: show both charts, one above the other. */
+    .pager {
+      display: flex;
+      flex-direction: column;
+      gap: 2rem;
+      overflow: visible;
+      scroll-snap-type: none;
+    }
+    .dots {
+      display: none;
+    }
+    .hero {
+      padding-block: 1.5rem;
+    }
+  }
+  /* Keep the charts in view while scrolling the list, when they fit on screen. */
+  @media (min-width: 52.5rem) and (min-height: 46rem) {
+    .side {
+      position: sticky;
+      top: 1.5rem;
+    }
   }
 </style>

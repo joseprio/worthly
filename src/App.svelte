@@ -7,11 +7,11 @@
   const route = $derived(router.route);
 </script>
 
-<div class="shell" class:with-fab={route.name == "overview"}>
+<div class="shell">
   <main>
-    {#if route.name == "overview"}
-      <Overview />
-    {:else if route.name == "item"}
+    <!-- Home stays underneath; adding or editing an item opens as a bottom sheet over it. -->
+    <Overview />
+    {#if route.name == "item"}
       {#key route.id}
         <ItemEditor id={route.id} />
       {/key}
@@ -26,10 +26,9 @@
     display: flex;
     flex-direction: column;
     min-height: 100dvh;
-    max-width: 40rem;
+    /* Two-column layout on wide screens (see Overview). */
+    max-width: 72rem;
     margin-inline: auto;
-  }
-  .shell.with-fab {
     /* Keeps snackbars above the FAB, as Material 3 specifies. */
     --m3v-bottom-offset: 5.5rem;
   }

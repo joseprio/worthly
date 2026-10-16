@@ -1,9 +1,18 @@
+<script module lang="ts">
+  export type Point = { date: string; low: number; high: number };
+  /** One item drawn on top of the overall series; points line up with `points` (undefined = no value yet). */
+  export type Focus = { label: string; kind: "asset" | "liability"; points: (Point | undefined)[] };
+</script>
+
 <script lang="ts">
   import { dateMonthYear, dateShort, formatRange, moneyCompact } from "./format";
   import { parseDate } from "./model";
-
-  type Point = { date: string; low: number; high: number };
-  let { points, today }: { points: Point[]; today: string } = $props();
+  let {
+    points,
+    today,
+    label = "Net worth",
+    focus,
+  }: { points: Point[]; today: string; label?: string; focus?: Focus } = $props();
 
   let width = $state(320);
   const height = 240;
@@ -11,9 +20,11 @@
 
   const t0 = $derived(parseDate(points[0].date));
   const t1 = $derived(parseDate(points[points.length - 1].date));
+  const focusPoints = $derived((focus?.points ?? []).filter((p): p is Point => p != undefined));
   const extent = $derived.by(() => {
-    let min = Math.min(0, ...points.map((p) => p.low));
-    let max = Math.max(0, ...points.map((p) => p.high));
+    const all = [...points, ...focusPoints];
+    let min = Math.min(0, ...all.map((p) => p.low));
+    let max = Math.max(0, ...all.map((p) => p.high));
     if (min == max) max = min + 1;
     return { min, max };
   });
@@ -37,15 +48,23 @@
     pad.left + ((parseDate(date) - t0) / (t1 - t0 || 1)) * (width - pad.left - pad.right);
   const y = (v: number) => pad.top + (1 - (v - yMin) / (yMax - yMin)) * (height - pad.top - pad.bottom);
 
-  const band = $derived(
-    points.map((p) => `${x(p.date)},${y(p.high)}`).join(" L") +
-      " L" +
-      [...points]
-        .reverse()
-        .map((p) => `${x(p.date)},${y(p.low)}`)
-        .join(" L"),
-  );
-  const mid = $derived(points.map((p) => `${x(p.date)},${y((p.low + p.high) / 2)}`).join(" L"));
+  const bandPath = (series: Point[]) =>
+    series.length
+      ? "M" +
+        series.map((p) => `${x(p.date)},${y(p.high)}`).join(" L") +
+        " L" +
+        [...series]
+          .reverse()
+          .map((p) => `${x(p.date)},${y(p.low)}`)
+          .join(" L") +
+        " Z"
+      : "";
+  const midPath = (series: Point[]) =>
+    series.length ? "M" + series.map((p) => `${x(p.date)},${y((p.low + p.high) / 2)}`).join(" L") : "";
+  const band = $derived(bandPath(points));
+  const mid = $derived(midPath(points));
+  const focusBand = $derived(bandPath(focusPoints));
+  const focusMid = $derived(midPath(focusPoints));
 
   const xTicks = $derived.by(() => {
     const n = width < 420 ? 3 : 5;
@@ -63,6 +82,9 @@
     hover = best;
   };
   const hp = $derived(hover == undefined ? undefined : points[hover]);
+  const hf = $derived(hover == undefined ? undefined : focus?.points[hover]);
+  // Tooltip and dots follow the focused item when there is one.
+  const marked = $derived(focus ? hf : hp);
 </script>
 
 <div class="chart" bind:clientWidth={width}>
@@ -70,7 +92,7 @@
     {width}
     {height}
     role="img"
-    aria-label="Estimated net worth range over time"
+    aria-label={focus ? `${focus.label} and ${label.toLowerCase()} over time` : `${label} range over time`}
     onpointermove={onmove}
     onpointerdown={onmove}
     onpointerleave={() => (hover = undefined)}
@@ -93,8 +115,16 @@
       </text>
     {/each}
 
-    <path class="band" d={`M${band} Z`} />
-    <path class="mid" d={`M${mid}`} />
+    <g class="overall" class:muted={focus != undefined}>
+      <path class="band" d={band} />
+      <path class="mid" d={mid} />
+    </g>
+    {#if focus}
+      <g class="focus {focus.kind}">
+        <path class="band" d={focusBand} />
+        <path class="mid" d={focusMid} />
+      </g>
+    {/if}
 
     {#if showToday}
       <line class="today" x1={x(today)} x2={x(today)} y1={pad.top} y2={height - pad.bottom} />
@@ -103,8 +133,12 @@
 
     {#if hp}
       <line class="cross" x1={x(hp.date)} x2={x(hp.date)} y1={pad.top} y2={height - pad.bottom} />
-      <circle class="dot" cx={x(hp.date)} cy={y(hp.high)} r="4" />
-      <circle class="dot" cx={x(hp.date)} cy={y(hp.low)} r="4" />
+      {#if marked}
+        <g class="dots {focus ? `focus ${focus.kind}` : ""}">
+          <circle class="dot" cx={x(marked.date)} cy={y(marked.high)} r="4" />
+          <circle class="dot" cx={x(marked.date)} cy={y(marked.low)} r="4" />
+        </g>
+      {/if}
     {/if}
   </svg>
 
@@ -112,10 +146,16 @@
     <div
       class="tooltip"
       style:left="{Math.min(Math.max(x(hp.date), 90), width - 90)}px"
-      style:top="{Math.max(y(hp.high) - 12, 0)}px"
+      style:top="{Math.max(y((marked ?? hp).high) - 12, 0)}px"
     >
       <span class="t-date">{dateShort(hp.date)}</span>
-      <span class="t-value">{formatRange(hp.low, hp.high)}</span>
+      {#if focus}
+        <span class="t-label">{focus.label}</span>
+        <span class="t-value">{hf ? formatRange(hf.low, hf.high) : "No value yet"}</span>
+        <span class="t-label">{label}: {formatRange(hp.low, hp.high)}</span>
+      {:else}
+        <span class="t-value">{formatRange(hp.low, hp.high)}</span>
+      {/if}
     </div>
   {/if}
 </div>
@@ -145,6 +185,7 @@
   .band {
     fill: --translucent(var(--m3c-primary), 0.22);
     stroke: none;
+    transition: fill var(--m3-easing-fast);
   }
   .mid {
     fill: none;
@@ -152,6 +193,26 @@
     stroke-width: 2;
     stroke-linejoin: round;
     stroke-linecap: round;
+    transition: stroke var(--m3-easing-fast);
+  }
+  /* Overall series recedes to context while an item is in focus. */
+  .overall.muted .band {
+    fill: --translucent(var(--m3c-on-surface), 0.07);
+  }
+  .overall.muted .mid {
+    stroke: --translucent(var(--m3c-on-surface-variant), 0.55);
+  }
+  .focus.asset .band {
+    fill: --translucent(var(--viz-asset), 0.22);
+  }
+  .focus.asset .mid {
+    stroke: var(--viz-asset);
+  }
+  .focus.liability .band {
+    fill: --translucent(var(--viz-debt), 0.22);
+  }
+  .focus.liability .mid {
+    stroke: var(--viz-debt);
   }
   .today {
     stroke: var(--m3c-tertiary);
@@ -171,6 +232,14 @@
     stroke: var(--m3c-surface);
     stroke-width: 2;
   }
+  .dots.focus.asset .dot {
+    fill: var(--viz-asset);
+    stroke: var(--m3c-surface);
+  }
+  .dots.focus.liability .dot {
+    fill: var(--viz-debt);
+    stroke: var(--m3c-surface);
+  }
   .tooltip {
     position: absolute;
     transform: translate(-50%, -100%);
@@ -184,7 +253,8 @@
     white-space: nowrap;
     box-shadow: var(--m3-elevation-2);
   }
-  .t-date {
+  .t-date,
+  .t-label {
     @apply --m3-label-small;
   }
   .t-value {
