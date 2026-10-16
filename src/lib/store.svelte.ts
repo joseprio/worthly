@@ -28,7 +28,7 @@ export const blankItem = (category: Category = "isa"): Item => ({
   id: newId(),
   name: "",
   category,
-  kind: categories[category].kind,
+  kind: categories[category].kinds[0],
   snapshots: [],
   growthMin: 3,
   growthMax: 6,

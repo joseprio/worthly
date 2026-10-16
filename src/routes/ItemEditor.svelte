@@ -1,10 +1,21 @@
 <script lang="ts">
-  import { Button, DateField, Dialog, Icon, ListItem, Select, TextField, snackbar } from "m3-svelte";
+  import {
+    Button,
+    ConnectedButtons,
+    DateField,
+    Dialog,
+    Icon,
+    ListItem,
+    Select,
+    TextField,
+    snackbar,
+  } from "m3-svelte";
   import iconAdd from "@ktibow/iconset-material-symbols/add";
   import iconDelete from "@ktibow/iconset-material-symbols/delete-outline";
   import TopAppBar from "../lib/TopAppBar.svelte";
   import {
     categories,
+    categoriesFor,
     newId,
     sortedSnapshots,
     todayIso,
@@ -27,8 +38,8 @@
 
   // Form fields are strings so half-typed numbers ("3.", "-") don't get clobbered.
   let name = $state(start.name);
+  let kind = $state<Kind>(start.kind);
   let category = $state<string>(start.category);
-  let kind = $state<string>(start.kind);
   let growthMin = $state(String(start.growthMin));
   let growthMax = $state(String(start.growthMax));
   let monthly = $state(String(start.monthly));
@@ -47,8 +58,10 @@
   const valid = $derived(!errors.growthMin && !errors.growthMax && !errors.monthly);
   const isDebt = $derived(kind == "liability");
 
-  const onCategory = () => {
-    kind = categories[category as Category].kind;
+  // Keep the category valid for the chosen type.
+  const onKind = () => {
+    const allowed = categoriesFor(kind);
+    if (!allowed.includes(category as Category)) category = allowed[0];
   };
 
   const save = () => {
@@ -60,7 +73,7 @@
       id: start.id,
       name: name.trim(),
       category: category as Category,
-      kind: kind as Kind,
+      kind,
       growthMin: minN,
       growthMax: maxN,
       monthly: monthlyN,
@@ -105,13 +118,12 @@
   };
 
   const ordered = $derived([...snapshots].sort((a, b) => b.date.localeCompare(a.date)));
-  const categoryOptions = Object.entries(categories).map(([value, c]) => ({
-    value,
-    text: c.label,
-  }));
-  const kindOptions = [
-    { value: "asset", text: "Asset (something you own)" },
-    { value: "liability", text: "Liability (something you owe)" },
+  const categoryOptions = $derived(
+    categoriesFor(kind).map((value) => ({ value, text: categories[value].label })),
+  );
+  const kindOptions: { value: Kind; text: string }[] = [
+    { value: "asset", text: "Asset" },
+    { value: "liability", text: "Liability" },
   ];
 </script>
 
@@ -133,9 +145,19 @@
   }}
 >
   <div class="fields">
+    <div class="kind" role="radiogroup" aria-label="Type">
+      <ConnectedButtons>
+        {#each kindOptions as k (k.value)}
+          <Button variant="tonal" label>
+            <input type="radio" name="kind" value={k.value} bind:group={kind} onchange={onKind} />
+            {k.text}
+          </Button>
+        {/each}
+      </ConnectedButtons>
+      <p class="hint">{isDebt ? "Something you owe." : "Something you own."}</p>
+    </div>
+    <Select label="Category" options={categoryOptions} bind:value={category} width="100%" />
     <TextField label="Name (optional)" bind:value={name} />
-    <Select label="Category" options={categoryOptions} bind:value={category} onchange={onCategory} width="100%" />
-    <Select label="Type" options={kindOptions} bind:value={kind} width="100%" />
   </div>
 
   <section>
@@ -262,6 +284,20 @@
     margin-top: -0.5rem;
   }
   .none {
+    margin-top: 0;
+  }
+  .kind {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .kind > :global(*:first-child) {
+    display: flex;
+  }
+  .kind > :global(*:first-child > *) {
+    flex: 1;
+  }
+  .kind .hint {
     margin-top: 0;
   }
   .error {

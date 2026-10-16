@@ -11,17 +11,20 @@ export type Category =
   | "loan"
   | "other";
 
-export const categories: Record<Category, { label: string; kind: Kind }> = {
-  isa: { label: "ISA", kind: "asset" },
-  sipp: { label: "SIPP", kind: "asset" },
-  pension: { label: "Workplace pension", kind: "asset" },
-  savings: { label: "Savings account", kind: "asset" },
-  investments: { label: "General investment account", kind: "asset" },
-  property: { label: "Property", kind: "asset" },
-  mortgage: { label: "Mortgage", kind: "liability" },
-  loan: { label: "Loan or credit", kind: "liability" },
-  other: { label: "Other", kind: "asset" },
+export const categories: Record<Category, { label: string; kinds: Kind[] }> = {
+  isa: { label: "ISA", kinds: ["asset"] },
+  sipp: { label: "SIPP", kinds: ["asset"] },
+  pension: { label: "Workplace pension", kinds: ["asset"] },
+  savings: { label: "Savings account", kinds: ["asset"] },
+  investments: { label: "General investment account", kinds: ["asset"] },
+  property: { label: "Property", kinds: ["asset"] },
+  mortgage: { label: "Mortgage", kinds: ["liability"] },
+  loan: { label: "Loan or credit", kinds: ["liability"] },
+  other: { label: "Other", kinds: ["asset", "liability"] },
 };
+
+export const categoriesFor = (kind: Kind) =>
+  (Object.keys(categories) as Category[]).filter((c) => categories[c].kinds.includes(kind));
 
 /** A reported, exact value of an item on a given day (ISO yyyy-mm-dd). */
 export type Snapshot = { id: string; date: string; value: number };
