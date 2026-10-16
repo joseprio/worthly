@@ -11,6 +11,11 @@
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior-y: none;
+  /* Behave like a native app: no pinch-zoom (iOS ignores user-scalable=no) and no
+     double-tap zoom. Text still follows the system font size since sizes are in rem. */
+  touch-action: pan-x pan-y;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 body {
   margin: 0;

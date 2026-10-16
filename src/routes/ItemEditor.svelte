@@ -307,8 +307,12 @@
   }
   .row {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.75rem;
+  }
+  /* m3-svelte fields have min-width: 15rem, too wide for two side by side on a phone. */
+  .row > :global(.m3-container) {
+    min-width: 0;
   }
   .heading-row {
     display: flex;
