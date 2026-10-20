@@ -49,6 +49,10 @@
   });
   // Slice highlighted in the donut; set by touching a slice or hovering a row below.
   let active = $state<string | undefined>();
+  // A highlight can outlive its slice (e.g. its last known value was deleted); ignore it then.
+  const highlighted = $derived(
+    [...segments.asset, ...segments.liability].some((s) => s.id == active) ? active : undefined,
+  );
 
   const groups = $derived(
     [
@@ -99,7 +103,7 @@
               {today}
               title={filter == "all" ? "Progression" : `${caption} over time`}
               label={caption}
-              {active}
+              active={highlighted}
             />
           </div>
         </div>

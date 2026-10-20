@@ -139,7 +139,7 @@
       {#each ring.list as arc (arc.seg.id)}
         <g
           class="slice {ring.cls}"
-          class:dim={active != undefined && active != arc.seg.id}
+          class:dim={activeSeg != undefined && active != arc.seg.id}
           style:--shade={arc.shade}
           role="presentation"
           onpointerenter={() => (active = arc.seg.id)}
