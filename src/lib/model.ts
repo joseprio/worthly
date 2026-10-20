@@ -89,11 +89,6 @@ const growAt = (value: number, r: number, monthly: number, months: number) => {
 };
 
 /**
- * Value range of an item on `date`. Exact on a snapshot date; between snapshots it
- * projects forward from the latest earlier snapshot. Before the first snapshot the
- * item is treated as not existing. Liabilities are returned as positive balances.
- */
-/**
  * Required monthly payment: on a repayment mortgage, the amount that clears `balance` over
  * `months` at the rate (as UK lenders recalculate it when a rate changes); on interest-only,
  * just the interest.
@@ -112,7 +107,8 @@ export const mortgagePayment = (
 
 /** Mortgage balance on `date`, starting from a known balance on `from`. */
 const mortgageBalance = (m: Mortgage, balance: number, annualPct: number, from: string, date: string) => {
-  const elapsed = Math.max(0, monthsBetween(from, date));
+  // Negative before `from`: the same payments run backwards give the earlier, higher balance.
+  const elapsed = monthsBetween(from, date);
   const remaining = monthsBetween(from, m.termEnd);
   if (m.type == "interest-only") {
     // Interest is paid as it accrues; only overpayments reduce the balance, which stays
@@ -124,6 +120,11 @@ const mortgageBalance = (m: Mortgage, balance: number, annualPct: number, from: 
   return Math.max(0, growAt(balance, mortgageRate(annualPct), -payment, elapsed));
 };
 
+/**
+ * Value range of an item on `date`. Exact on a snapshot date; after it, projected forward from
+ * the latest earlier snapshot; before the first snapshot, projected backwards from it.
+ * Liabilities are returned as positive balances. Undefined only when there are no snapshots.
+ */
 export const itemRange = (item: Item, date: string): Range | undefined => {
   const snaps = sortedSnapshots(item);
   let base: Snapshot | undefined;
@@ -131,12 +132,15 @@ export const itemRange = (item: Item, date: string): Range | undefined => {
     if (s.date <= date) base = s;
     else break;
   }
+  // Before the first known value, run the same maths backwards from it, so an item added later
+  // (e.g. a mortgage first entered today) doesn't appear as a sudden step in the history.
+  base ??= snaps[0];
   if (!base) return undefined;
 
-  const months = Math.max(0, (parseDate(date) - parseDate(base.date)) / DAY) * MONTHS_PER_DAY;
+  const months = monthsBetween(base.date, date);
   if (item.kind == "asset") {
-    const a = grow(base.value, item.growthMin, item.monthly, months);
-    const b = grow(base.value, item.growthMax, item.monthly, months);
+    const a = Math.max(0, grow(base.value, item.growthMin, item.monthly, months));
+    const b = Math.max(0, grow(base.value, item.growthMax, item.monthly, months));
     return { low: Math.min(a, b), high: Math.max(a, b) };
   }
   if (item.mortgage) {
@@ -152,8 +156,7 @@ export const itemRange = (item: Item, date: string): Range | undefined => {
 
 /** Whether the item's value on `date` is projected rather than known on that exact day. */
 export const isProjected = (item: Item, date: string) => {
-  const base = sortedSnapshots(item).findLast((s) => s.date <= date);
-  return base != undefined && base.date < date;
+  return item.snapshots.length > 0 && !item.snapshots.some((s) => s.date == date);
 };
 
 /** Net worth range: best-case assets minus best-case debts, and vice versa. */
