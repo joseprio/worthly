@@ -23,6 +23,10 @@ export const categories: Record<Category, { label: string; kinds: Kind[] }> = {
   other: { label: "Other", kinds: ["asset", "liability"] },
 };
 
+/** Default yearly growth range for a new item, in percent. Property tracks the 2% inflation target. */
+export const defaultGrowth = (category: Category): [number, number] =>
+  category == "property" ? [1, 3] : [3, 6];
+
 export const categoriesFor = (kind: Kind) =>
   (Object.keys(categories) as Category[]).filter((c) => categories[c].kinds.includes(kind));
 
@@ -144,6 +148,12 @@ export const itemRange = (item: Item, date: string): Range | undefined => {
   const a = Math.max(0, grow(base.value, item.growthMin, -item.monthly, months));
   const b = Math.max(0, grow(base.value, item.growthMax, -item.monthly, months));
   return { low: Math.min(a, b), high: Math.max(a, b) };
+};
+
+/** Whether the item's value on `date` is projected rather than known on that exact day. */
+export const isProjected = (item: Item, date: string) => {
+  const base = sortedSnapshots(item).findLast((s) => s.date <= date);
+  return base != undefined && base.date < date;
 };
 
 /** Net worth range: best-case assets minus best-case debts, and vice versa. */

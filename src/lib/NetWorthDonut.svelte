@@ -1,5 +1,5 @@
 <script module lang="ts">
-  export type Segment = { id: string; label: string; low: number; high: number };
+  export type Segment = { id: string; label: string; low: number; high: number; projected?: boolean };
 </script>
 
 <script lang="ts">
@@ -11,6 +11,7 @@
     low,
     high,
     date,
+    projected = false,
     caption = "Net worth",
     active = $bindable(),
   }: {
@@ -19,6 +20,8 @@
     low: number;
     high: number;
     date: string;
+    /** Any value is projected: show an approximate midpoint instead of the range. */
+    projected?: boolean;
     caption?: string;
     active?: string;
   } = $props();
@@ -68,7 +71,10 @@
     return { asset: ring(OUTER, r1), debt: ring(r2, r3) };
   });
 
-  type Arc = { seg: Segment; d: string; full: boolean };
+  type Arc = { seg: Segment; d: string; full: boolean; shade: string };
+
+  /** How far slice i of n fades toward the surface: biggest at full colour, smallest at 60%. */
+  const shade = (i: number, n: number) => `${n > 1 ? Math.round((i / (n - 1)) * 60) : 0}%`;
 
   const point = (r: number, angle: number) =>
     `${(C + r * Math.sin(angle)).toFixed(2)},${(C - r * Math.cos(angle)).toFixed(2)}`;
@@ -78,17 +84,19 @@
     const sorted = bySize(list).filter((s) => mid(s) > 0);
     const gap = GAP / r;
     let start = 0;
-    return sorted.map((seg) => {
+    return sorted.map((seg, i) => {
       const sweep = (mid(seg) / total) * Math.PI * 2;
       const from = start;
       start += sweep;
-      if (sorted.length == 1 && sweep >= Math.PI * 2 - 1e-6) return { seg, d: "", full: true };
+      const s = shade(i, sorted.length);
+      if (sorted.length == 1 && sweep >= Math.PI * 2 - 1e-6)
+        return { seg, d: "", full: true, shade: s };
       const a0 = from + gap / 2;
       const a1 = Math.max(a0 + 0.001, from + sweep - gap / 2);
       const large = a1 - a0 > Math.PI ? 1 : 0;
       const sweepFlag = dir == 1 ? 1 : 0;
       const d = `M${point(r, dir * a0)} A${r},${r} 0 ${large} ${sweepFlag} ${point(r, dir * a1)}`;
-      return { seg, d, full: false };
+      return { seg, d, full: false, shade: s };
     });
   };
 
@@ -132,6 +140,7 @@
         <g
           class="slice {ring.cls}"
           class:dim={active != undefined && active != arc.seg.id}
+          style:--shade={arc.shade}
           role="presentation"
           onpointerenter={() => (active = arc.seg.id)}
           onpointerleave={() => (active = undefined)}
@@ -154,19 +163,11 @@
     {#if activeSeg}
       <span class="caption">{activeSeg.label}</span>
       {@const sign = activeIsDebt ? "−" : ""}
-      <span class="value">{sign}{money(activeSeg.low)}</span>
-      {#if Math.round(activeSeg.low) != Math.round(activeSeg.high)}
-        <span class="to">to {sign}{money(activeSeg.high)}</span>
-      {/if}
+      <span class="value">{activeSeg.projected ? "~" : ""}{sign}{money(mid(activeSeg))}</span>
       <span class="caption">{share}</span>
     {:else}
       <span class="caption">{caption}</span>
-      {#if Math.round(low) == Math.round(high)}
-        <span class="value">{money(low)}</span>
-      {:else}
-        <span class="value">{money(low)}</span>
-        <span class="to">to {money(high)}</span>
-      {/if}
+      <span class="value">{projected ? "~" : ""}{money((low + high) / 2)}</span>
       <span class="caption">{dateShort(date)}</span>
     {/if}
   </div>
@@ -195,10 +196,10 @@
     transition: opacity var(--m3-easing-fast);
   }
   .asset .mark {
-    stroke: var(--viz-asset);
+    stroke: color-mix(in oklab, var(--viz-asset), var(--m3c-surface) var(--shade));
   }
   .debt .mark {
-    stroke: var(--viz-debt);
+    stroke: color-mix(in oklab, var(--viz-debt), var(--m3c-surface) var(--shade));
   }
   .slice.dim .mark {
     opacity: 0.3;
@@ -234,10 +235,6 @@
   .value {
     @apply --m3-headline-small;
     font-weight: 500;
-    white-space: nowrap;
-  }
-  .to {
-    @apply --m3-title-small;
     white-space: nowrap;
   }
 </style>

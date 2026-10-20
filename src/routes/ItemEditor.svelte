@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from "svelte";
   import {
     Button,
     ConnectedButtons,
@@ -16,6 +17,7 @@
   import {
     categories,
     categoriesFor,
+    defaultGrowth,
     monthsBetween,
     mortgagePayment,
     newId,
@@ -89,6 +91,21 @@
     { value: "interest-only", text: "Interest only" },
   ];
 
+  // Swap in the new category's default growth, unless the user has typed their own range.
+  let prevCategory = start.category;
+  $effect(() => {
+    const next = category as Category;
+    untrack(() => {
+      const [oldMin, oldMax] = defaultGrowth(prevCategory);
+      if (num(growthMin) == oldMin && num(growthMax) == oldMax) {
+        const [newMin, newMax] = defaultGrowth(next);
+        growthMin = String(newMin);
+        growthMax = String(newMax);
+      }
+      prevCategory = next;
+    });
+  });
+
   // Keep the category valid for the chosen type.
   const onKind = () => {
     const allowed = categoriesFor(kind);
@@ -146,8 +163,17 @@
     ];
     dialogOpen = false;
   };
-  const removeSnapshot = (sid: string) => {
+  // Confirm before removing a known value.
+  let pendingRemove = $state<Snapshot | null>(null);
+  let confirmOpen = $state(false);
+  const askRemove = (snap: Snapshot) => {
+    pendingRemove = snap;
+    confirmOpen = true;
+  };
+  const removeSnapshot = () => {
+    const sid = pendingRemove?.id;
     snapshots = snapshots.filter((s) => s.id != sid);
+    confirmOpen = false;
   };
 
   const ordered = $derived([...snapshots].sort((a, b) => b.date.localeCompare(a.date)));
@@ -259,7 +285,7 @@
       </section>
     {:else}
       <section>
-        <h2>{isDebt ? "Monthly repayment" : "Monthly contribution"}</h2>
+        <h2>{isDebt ? "Monthly repayment" : "Expected monthly contribution"}</h2>
         <p class="hint">
           {isDebt
             ? "How much you pay off each month, in pounds."
@@ -296,7 +322,7 @@
                 <Button
                   variant="text"
                   iconType="full"
-                  onclick={() => removeSnapshot(snap.id)}
+                  onclick={() => askRemove(snap)}
                   aria-label={`Remove value from ${dateLong(snap.date)}`}
                 >
                   <Icon icon={iconDelete} />
@@ -333,6 +359,16 @@
   {#snippet buttons()}
     <Button variant="text" onclick={() => (dialogOpen = false)}>Cancel</Button>
     <Button variant="text" disabled={!draftOk} onclick={addSnapshot}>Add</Button>
+  {/snippet}
+</Dialog>
+
+<Dialog headline="Remove this value?" bind:open={confirmOpen}>
+  {#if pendingRemove}
+    {money(pendingRemove.value)} on {dateLong(pendingRemove.date)} will be removed when you save.
+  {/if}
+  {#snippet buttons()}
+    <Button variant="text" onclick={() => (confirmOpen = false)}>Cancel</Button>
+    <Button variant="text" onclick={removeSnapshot}>Remove</Button>
   {/snippet}
 </Dialog>
 

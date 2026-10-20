@@ -1,4 +1,4 @@
-import { categories, newId, type Category, type Item } from "./model";
+import { categories, defaultGrowth, newId, type Category, type Item } from "./model";
 
 const KEY = "worthly:items:v1";
 
@@ -30,8 +30,8 @@ export const blankItem = (category: Category = "isa"): Item => ({
   category,
   kind: categories[category].kinds[0],
   snapshots: [],
-  growthMin: 3,
-  growthMax: 6,
+  growthMin: defaultGrowth(category)[0],
+  growthMax: defaultGrowth(category)[1],
   monthly: 0,
 });
 

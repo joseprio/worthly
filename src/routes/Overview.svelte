@@ -5,7 +5,14 @@
   import iconDebt from "@ktibow/iconset-material-symbols/credit-card";
   import NetWorthDonut, { type Segment } from "../lib/NetWorthDonut.svelte";
   import ProgressionPanel from "../lib/ProgressionPanel.svelte";
-  import { categories, itemRange, netWorthRange, todayIso, type Item } from "../lib/model";
+  import {
+    categories,
+    isProjected,
+    itemRange,
+    netWorthRange,
+    todayIso,
+    type Item,
+  } from "../lib/model";
   import { formatRange, percent } from "../lib/format";
   import { go } from "../lib/router.svelte";
   import { store } from "../lib/store.svelte";
@@ -25,11 +32,18 @@
   const shown = $derived(store.items.filter((i) => filter == "all" || i.kind == filter));
 
   const range = $derived(netWorthRange(shown, today));
+  const projected = $derived(shown.some((i) => isProjected(i, today)));
   const segments = $derived.by(() => {
     const out: Record<Item["kind"], Segment[]> = { asset: [], liability: [] };
     for (const item of shown) {
       const r = itemRange(item, today);
-      if (r) out[item.kind].push({ id: item.id, label: title(item), ...r });
+      if (r)
+        out[item.kind].push({
+          id: item.id,
+          label: title(item),
+          projected: isProjected(item, today),
+          ...r,
+        });
     }
     return out;
   });
@@ -73,6 +87,7 @@
               liabilities={segments.liability}
               low={range.low}
               high={range.high}
+              {projected}
               {caption}
               date={today}
               bind:active
