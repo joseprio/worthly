@@ -83,6 +83,7 @@
         : isDebt ? "Balance owed (£)" : "Value (£)"}
       bind:value
       inputmode="decimal"
+      data-autofocus
       onkeydown={(e) => {
         // preventDefault stops the Enter from also "clicking" what opened the sheet once focus returns to it.
         if (e.key == "Enter") {

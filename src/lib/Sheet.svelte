@@ -22,6 +22,8 @@
   let dialog: HTMLDialogElement | undefined = $state();
   $effect(() => {
     dialog?.showModal();
+    // showModal focuses the first control; content can mark a better start with data-autofocus.
+    dialog?.querySelector<HTMLElement>("[data-autofocus]")?.focus();
   });
 
   // Drag-to-dismiss, tracked from the grab area so it never fights with scrolling the body.

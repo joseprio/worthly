@@ -3,6 +3,12 @@
   import iconAdd from "@ktibow/iconset-material-symbols/add";
   import iconAsset from "@ktibow/iconset-material-symbols/savings-outline";
   import iconDebt from "@ktibow/iconset-material-symbols/credit-card";
+  import iconInvestments from "@ktibow/iconset-material-symbols/finance-mode";
+  import iconMortgage from "@ktibow/iconset-material-symbols/account-balance-outline";
+  import iconOther from "@ktibow/iconset-material-symbols/money-bag-outline";
+  import iconPension from "@ktibow/iconset-material-symbols/elderly";
+  import iconProperty from "@ktibow/iconset-material-symbols/home-outline";
+  import type { IconifyIcon } from "@iconify/types";
   import AddValueSheet from "../lib/AddValueSheet.svelte";
   import NetWorthDonut, { type Segment } from "../lib/NetWorthDonut.svelte";
   import ProgressionPanel from "../lib/ProgressionPanel.svelte";
@@ -12,6 +18,7 @@
     netWorthRange,
     todayIso,
     withEntry,
+    type Category,
     type Item,
     type Snapshot,
   } from "../lib/model";
@@ -83,6 +90,18 @@
     addingTo = undefined;
     snackbar("Value added");
   };
+
+  const categoryIcons: Partial<Record<Category, IconifyIcon>> = {
+    isa: iconInvestments,
+    investments: iconInvestments,
+    sipp: iconPension,
+    pension: iconPension,
+    property: iconProperty,
+    mortgage: iconMortgage,
+    other: iconOther,
+  };
+  const icon = (item: Item) =>
+    categoryIcons[item.category] ?? (item.kind == "asset" ? iconAsset : iconDebt);
 
   const supporting = (item: Item) => {
     const label = categories[item.category].label;
@@ -178,7 +197,7 @@
                 {#snippet leading()}
                   <!-- Tinted with the donut's colours, so the list doubles as its legend. -->
                   <span class="legend {item.kind}" class:off={!r}>
-                    <Icon icon={item.kind == "asset" ? iconAsset : iconDebt} />
+                    <Icon icon={icon(item)} />
                   </span>
                 {/snippet}
                 {#snippet trailing()}
@@ -363,6 +382,8 @@
   }
   .legend {
     display: flex;
+    /* Material 3's list icon size; the icon is 1em. */
+    font-size: 1.5rem;
   }
   .legend.asset {
     color: var(--viz-asset);
