@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-  import { dateShort, money } from "./format";
+  import { dateShort, money, spread } from "./format";
 
   let {
     assets,
@@ -32,8 +32,6 @@
   const MIN_W = 3; // thinnest a ring may get, so a tiny total stays visible
 
   const mid = (s: Segment) => (s.low + s.high) / 2;
-  /** Half the width of a range, rounded like the money it's shown as. */
-  const spread = (low: number, high: number) => Math.round((high - low) / 2);
   const bySize = (list: Segment[]) => [...list].sort((a, b) => mid(b) - mid(a));
 
   const assetTotal = $derived(assets.reduce((t, s) => t + mid(s), 0));

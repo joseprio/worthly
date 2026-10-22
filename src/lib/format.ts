@@ -33,6 +33,8 @@ export const money = (n: number) => gbp.format(Math.round(n));
 export const moneyCompact = (n: number) => gbpCompact.format(n);
 export const formatRange = (low: number, high: number) =>
   Math.round(low) == Math.round(high) ? money(low) : `${money(low)} – ${money(high)}`;
+/** Half the width of a range, rounded like the money it's shown as: shown as ± after the midpoint. */
+export const spread = (low: number, high: number) => Math.round((high - low) / 2);
 export const percent = (n: number) => `${n.toLocaleString(LOCALE, { maximumFractionDigits: 2 })}%`;
 
 const asDate = (iso: string) => new Date(iso + "T00:00:00Z");

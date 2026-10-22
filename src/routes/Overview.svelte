@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { Button, ConnectedButtons, FAB, Icon, ListItem } from "m3-svelte";
+  import { Button, ConnectedButtons, FAB, Icon, ListItem, snackbar } from "m3-svelte";
   import iconAdd from "@ktibow/iconset-material-symbols/add";
   import iconAsset from "@ktibow/iconset-material-symbols/savings-outline";
   import iconDebt from "@ktibow/iconset-material-symbols/credit-card";
+  import AddValueSheet from "../lib/AddValueSheet.svelte";
   import NetWorthDonut, { type Segment } from "../lib/NetWorthDonut.svelte";
   import ProgressionPanel from "../lib/ProgressionPanel.svelte";
   import {
@@ -10,11 +11,13 @@
     itemRange,
     netWorthRange,
     todayIso,
+    withEntry,
     type Item,
+    type Snapshot,
   } from "../lib/model";
-  import { formatRange, percent } from "../lib/format";
+  import { money, percent, spread } from "../lib/format";
   import { go } from "../lib/router.svelte";
-  import { store } from "../lib/store.svelte";
+  import { saveItem, store } from "../lib/store.svelte";
 
   const today = todayIso();
   const hasValues = $derived(store.items.some((i) => i.snapshots.length > 0));
@@ -71,6 +74,16 @@
     item.growthMin == item.growthMax
       ? `${percent(item.growthMin)} a year`
       : `${percent(item.growthMin)} to ${percent(item.growthMax)} a year`;
+
+  // Item getting a value straight from its row, without opening the editor.
+  let addingTo = $state<Item | undefined>();
+  const addEntry = (entry: Snapshot) => {
+    const item = addingTo!;
+    saveItem({ ...$state.snapshot(item), snapshots: withEntry(item.snapshots, entry) });
+    addingTo = undefined;
+    snackbar("Value added");
+  };
+
   const supporting = (item: Item) => {
     const label = categories[item.category].label;
     return item.name && item.name != label ? `${label} · ${rate(item)}` : rate(item);
@@ -152,37 +165,60 @@
         <div class="list">
           {#each group.items as item (item.id)}
             {@const r = itemRange(item, today)}
-            <ListItem
-              onclick={() => go(`item/${item.id}`)}
-              headline={title(item)}
-              supporting={supporting(item)}
-              onpointerenter={() => r && (active = item.id)}
-              onpointerleave={() => (active = undefined)}
-              onfocus={() => r && (active = item.id)}
-              onblur={() => (active = undefined)}
-            >
-              {#snippet leading()}
-                <!-- Tinted with the donut's colours, so the list doubles as its legend. -->
-                <span class="legend {item.kind}" class:off={!r}>
-                  <Icon icon={item.kind == "asset" ? iconAsset : iconDebt} />
-                </span>
-              {/snippet}
-              {#snippet trailing()}
-                {#if r}
-                  <span class="amount" class:debt={item.kind == "liability"}>
-                    {item.kind == "liability" ? "−" : ""}{formatRange(r.low, r.high)}
+            <div class="row">
+              <ListItem
+                onclick={() => go(`item/${item.id}`)}
+                headline={title(item)}
+                supporting={supporting(item)}
+                onpointerenter={() => r && (active = item.id)}
+                onpointerleave={() => (active = undefined)}
+                onfocus={() => r && (active = item.id)}
+                onblur={() => (active = undefined)}
+              >
+                {#snippet leading()}
+                  <!-- Tinted with the donut's colours, so the list doubles as its legend. -->
+                  <span class="legend {item.kind}" class:off={!r}>
+                    <Icon icon={item.kind == "asset" ? iconAsset : iconDebt} />
                   </span>
-                {:else}
-                  <span class="missing">No values yet</span>
-                {/if}
-              {/snippet}
-            </ListItem>
+                {/snippet}
+                {#snippet trailing()}
+                  {#if r}
+                    <span class="amount" class:debt={item.kind == "liability"}>
+                      {item.kind == "liability" ? "−" : ""}{money((r.low + r.high) / 2)}
+                      {#if spread(r.low, r.high) > 0}
+                        <span class="spread">±{money(spread(r.low, r.high))}</span>
+                      {/if}
+                    </span>
+                  {:else}
+                    <span class="missing">No values yet</span>
+                  {/if}
+                {/snippet}
+              </ListItem>
+              <!-- Beside the row, not in it: the row is itself a button. -->
+              <Button
+                variant="text"
+                iconType="full"
+                onclick={() => (addingTo = item)}
+                aria-label={`Add value to ${title(item)}`}
+              >
+                <Icon icon={iconAdd} />
+              </Button>
+            </div>
           {/each}
         </div>
       {/if}
     {/each}
   </div>
 </div>
+
+{#if addingTo}
+  <AddValueSheet
+    kind={addingTo.kind}
+    snapshots={addingTo.snapshots}
+    onadd={addEntry}
+    onclose={() => (addingTo = undefined)}
+  />
+{/if}
 
 <div class="fab">
   <FAB color="primary-container" icon={iconAdd} text="Add item" onclick={() => go("item/new")} />
@@ -297,10 +333,26 @@
     flex-direction: column;
     margin-inline: -1rem;
   }
+  .row {
+    display: flex;
+    align-items: center;
+    padding-inline-end: 0.25rem;
+  }
+  /* ListItem wraps its row in a display: contents <li>. */
+  .row > :global(li > .m3-container) {
+    flex: 1;
+    min-width: 0;
+  }
   .amount {
     @apply --m3-label-large;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
     font-variant-numeric: tabular-nums;
-    text-align: end;
+  }
+  .spread {
+    @apply --m3-label-medium;
+    color: var(--m3c-on-surface-variant);
   }
   .amount.debt {
     color: var(--m3c-error);

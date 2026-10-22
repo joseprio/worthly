@@ -30,8 +30,13 @@ export const defaultGrowth = (category: Category): [number, number] =>
 export const categoriesFor = (kind: Kind) =>
   (Object.keys(categories) as Category[]).filter((c) => categories[c].kinds.includes(kind));
 
-/** A reported, exact value of an item on a given day (ISO yyyy-mm-dd). */
-export type Snapshot = { id: string; date: string; value: number };
+/**
+ * A known entry for an item on a given day (ISO yyyy-mm-dd). Absolute entries are an exact
+ * value (or balance owed). Relative entries are an amount paid in or out, signed by its effect:
+ * positive raises the value or balance (a fund, new borrowing), negative lowers it (a
+ * withdrawal, a payment).
+ */
+export type Snapshot = { id: string; date: string; value: number; relative?: boolean };
 
 export type Item = {
   id: string;
@@ -66,8 +71,20 @@ export const parseDate = (iso: string) => new Date(iso + "T00:00:00Z").getTime()
 export const toIso = (time: number) => new Date(time).toISOString().slice(0, 10);
 export const todayIso = () => toIso(Date.now() - new Date().getTimezoneOffset() * 60_000);
 
-export const sortedSnapshots = (item: Item) =>
-  [...item.snapshots].sort((a, b) => a.date.localeCompare(b.date));
+/** Entries oldest first; on the same day, the absolute value comes before relative amounts. */
+export const sortedSnapshots = (item: Pick<Item, "snapshots">) =>
+  [...item.snapshots].sort(
+    (a, b) => a.date.localeCompare(b.date) || Number(!!a.relative) - Number(!!b.relative),
+  );
+
+/** Entries with `entry` added. One exact value per day: a new one replaces it; amounts paid in or out add up. */
+export const withEntry = (snapshots: Snapshot[], entry: Snapshot) =>
+  sortedSnapshots({
+    snapshots: [
+      ...snapshots.filter((s) => entry.relative || s.relative || s.date != entry.date),
+      entry,
+    ],
+  });
 
 /**
  * Compounds `value` monthly at an annual rate over `months`, adding `monthly` each month.
@@ -120,37 +137,44 @@ const mortgageBalance = (m: Mortgage, balance: number, annualPct: number, from: 
   return Math.max(0, growAt(balance, mortgageRate(annualPct), -payment, elapsed));
 };
 
-/**
- * Value range of an item on `date`. Exact on a snapshot date; after it, projected forward from
- * the latest earlier snapshot; before the first snapshot, projected backwards from it.
- * Liabilities are returned as positive balances. Undefined only when there are no snapshots.
- */
-export const itemRange = (item: Item, date: string): Range | undefined => {
-  const snaps = sortedSnapshots(item);
-  let base: Snapshot | undefined;
-  for (const s of snaps) {
-    if (s.date <= date) base = s;
-    else break;
-  }
-  // Before the first known value, run the same maths backwards from it, so an item added later
-  // (e.g. a mortgage first entered today) doesn't appear as a sudden step in the history.
-  base ??= snaps[0];
-  if (!base) return undefined;
-
-  const months = monthsBetween(base.date, date);
-  if (item.kind == "asset") {
-    const a = Math.max(0, grow(base.value, item.growthMin, item.monthly, months));
-    const b = Math.max(0, grow(base.value, item.growthMax, item.monthly, months));
-    return { low: Math.min(a, b), high: Math.max(a, b) };
-  }
-  if (item.mortgage) {
-    const a = mortgageBalance(item.mortgage, base.value, item.growthMin, base.date, date);
-    const b = mortgageBalance(item.mortgage, base.value, item.growthMax, base.date, date);
-    return { low: Math.min(a, b), high: Math.max(a, b) };
-  }
+/** Value of `value`, known on `from`, on `date` at one yearly rate. Liabilities are positive. */
+const project = (item: Item, value: number, annualPct: number, from: string, date: string) => {
+  const months = monthsBetween(from, date);
+  if (item.kind == "asset") return Math.max(0, grow(value, annualPct, item.monthly, months));
+  if (item.mortgage) return mortgageBalance(item.mortgage, value, annualPct, from, date);
   // Liabilities: interest grows the balance, repayments shrink it; never below zero.
-  const a = Math.max(0, grow(base.value, item.growthMin, -item.monthly, months));
-  const b = Math.max(0, grow(base.value, item.growthMax, -item.monthly, months));
+  return Math.max(0, grow(value, annualPct, -item.monthly, months));
+};
+
+/**
+ * Value of an item on `date` at one yearly rate. Runs through the entries in order: an absolute
+ * entry sets the value; a relative one is added to the value projected up to its date. Before the
+ * first entry, an absolute value is projected backwards, so an item added later (e.g. a mortgage
+ * first entered today) doesn't appear as a sudden step in the history; an item that starts with
+ * a relative amount held nothing before it. Undefined only when there are no entries.
+ */
+export const valueAt = (item: Item, annualPct: number, date: string): number | undefined => {
+  const entries = sortedSnapshots(item);
+  const first = entries[0];
+  if (!first) return undefined;
+  if (first.relative && date < first.date) return 0;
+  let from = first.date;
+  let value = first.relative ? 0 : first.value;
+  for (const e of entries) {
+    if (e.date > date) break;
+    value = e.relative
+      ? Math.max(0, project(item, value, annualPct, from, e.date) + e.value)
+      : e.value;
+    from = e.date;
+  }
+  return project(item, value, annualPct, from, date);
+};
+
+/** Value range of an item on `date`, between its lowest and highest rates. */
+export const itemRange = (item: Item, date: string): Range | undefined => {
+  const a = valueAt(item, item.growthMin, date);
+  const b = valueAt(item, item.growthMax, date);
+  if (a == undefined || b == undefined) return undefined;
   return { low: Math.min(a, b), high: Math.max(a, b) };
 };
 

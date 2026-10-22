@@ -27,8 +27,10 @@ export default defineConfig({
         orientation: "portrait",
         start_url: "/worthly/",
         scope: "/worthly/",
-        theme_color: "#f7faf5",
-        background_color: "#f7faf5",
+        // The Android splash takes one colour and ignores dark mode; match the dark theme, as
+        // most phones run in it. index.html's theme-color metas take over once the page loads.
+        theme_color: "#0b0f0c",
+        background_color: "#0b0f0c",
         categories: ["finance"],
       },
       workbox: {

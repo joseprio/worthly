@@ -13,6 +13,7 @@
   } from "m3-svelte";
   import iconAdd from "@ktibow/iconset-material-symbols/add";
   import iconDelete from "@ktibow/iconset-material-symbols/delete-outline";
+  import AddValueSheet from "../lib/AddValueSheet.svelte";
   import Sheet from "../lib/Sheet.svelte";
   import {
     categories,
@@ -20,9 +21,9 @@
     defaultGrowth,
     monthsBetween,
     mortgagePayment,
-    newId,
     sortedSnapshots,
-    todayIso,
+    valueAt,
+    withEntry,
     type Category,
     type Item,
     type Kind,
@@ -63,24 +64,43 @@
   const overpaymentN = $derived(overpayment.trim() == "" ? 0 : num(overpayment));
   const isMortgage = $derived(category == "mortgage");
   const hasTerm = $derived(isMortgage && /^\d{4}-\d{2}-\d{2}$/.test(termEnd));
+  const isDebt = $derived(kind == "liability");
+
+  // The item as entered; saved only when it's valid.
+  const draft = $derived<Item>({
+    id: start.id,
+    name: name.trim(),
+    category: category as Category,
+    kind,
+    growthMin: minN,
+    growthMax: maxN,
+    monthly: hasTerm ? start.monthly : monthlyN,
+    snapshots: sortedSnapshots({ snapshots }),
+    mortgage: hasTerm ? { type: repaymentType, termEnd, overpayment: overpaymentN } : undefined,
+  });
+
   const errors = $derived({
     growthMin: !Number.isFinite(minN),
     growthMax: !Number.isFinite(maxN) || maxN < minN,
     monthly: !hasTerm && (!Number.isFinite(monthlyN) || monthlyN < 0),
     overpayment: hasTerm && (!Number.isFinite(overpaymentN) || overpaymentN < 0),
+    // A payment needs a balance to come off.
+    snapshots: isDebt && !!draft.snapshots[0]?.relative,
   });
   const valid = $derived(!Object.values(errors).some(Boolean));
-  const isDebt = $derived(kind == "liability");
 
   // The required payment at each end of the rate range, from the latest known balance.
   const paymentHint = $derived.by(() => {
     if (!hasTerm) return "";
-    const latest = sortedSnapshots({ snapshots } as Item).at(-1);
+    const latest = draft.snapshots.at(-1);
     if (!latest) return "Add a known balance below to see the monthly payment.";
     const months = monthsBetween(latest.date, termEnd);
     if (months <= 0) return "This term ended before your latest known balance.";
-    if (!Number.isFinite(minN) || !Number.isFinite(maxN)) return "";
-    const [a, b] = [minN, maxN].map((r) => mortgagePayment(latest.value, r, months, repaymentType));
+    if (!Number.isFinite(minN) || !Number.isFinite(maxN) || errors.snapshots) return "";
+    // The balance after the latest entry, which may be a payment off an earlier balance.
+    const [a, b] = [minN, maxN].map((r) =>
+      mortgagePayment(valueAt(draft, r, latest.date)!, r, months, repaymentType),
+    );
     const amount = Math.round(a) == Math.round(b) ? money(a) : `${money(a)} to ${money(b)}`;
     return repaymentType == "repayment"
       ? `Required payment about ${amount} a month, from your latest balance.`
@@ -117,19 +137,7 @@
       showErrors = true;
       return;
     }
-    saveItem({
-      id: start.id,
-      name: name.trim(),
-      category: category as Category,
-      kind,
-      growthMin: minN,
-      growthMax: maxN,
-      monthly: hasTerm ? start.monthly : monthlyN,
-      snapshots: sortedSnapshots({ snapshots } as Item),
-      mortgage: hasTerm
-        ? { type: repaymentType, termEnd, overpayment: overpaymentN }
-        : undefined,
-    });
+    saveItem(draft);
     snackbar(isNew ? "Item added" : "Changes saved");
     back("");
   };
@@ -142,26 +150,10 @@
       snackbar("Item deleted", { Undo: () => saveItem(removed) }, false, 6000);
   };
 
-  // Dialog for adding a known value
-  let dialogOpen = $state(false);
-  let draftDate = $state(todayIso());
-  let draftValue = $state("");
-  const draftValueN = $derived(num(draftValue.replace(/[£,\s]/g, "")));
-  const draftOk = $derived(/^\d{4}-\d{2}-\d{2}$/.test(draftDate) && Number.isFinite(draftValueN));
-
-  const openDialog = () => {
-    draftDate = todayIso();
-    draftValue = "";
-    dialogOpen = true;
-  };
-  const addSnapshot = () => {
-    if (!draftOk) return;
-    // One value per day: a new value on an existing date replaces it.
-    snapshots = [
-      ...snapshots.filter((s) => s.date != draftDate),
-      { id: newId(), date: draftDate, value: Math.abs(draftValueN) },
-    ];
-    dialogOpen = false;
+  let adding = $state(false);
+  const addEntry = (entry: Snapshot) => {
+    snapshots = withEntry(snapshots, entry);
+    adding = false;
   };
   // Confirm before removing a known value.
   let pendingRemove = $state<Snapshot | null>(null);
@@ -176,7 +168,18 @@
     confirmOpen = false;
   };
 
-  const ordered = $derived([...snapshots].sort((a, b) => b.date.localeCompare(a.date)));
+  const ordered = $derived([...draft.snapshots].reverse());
+  // Amounts paid in or out show their sign and what they were.
+  const entryAmount = (s: Snapshot) =>
+    s.relative ? `${s.value < 0 ? "−" : "+"}${money(Math.abs(s.value))}` : money(s.value);
+  const entryLabel = (s: Snapshot) => {
+    const date = dateLong(s.date);
+    if (!s.relative) return date;
+    const what = isDebt
+      ? s.value < 0 ? "Payment" : "Borrowing"
+      : s.value < 0 ? "Withdrawal" : "Fund";
+    return `${date} · ${what}`;
+  };
   const categoryOptions = $derived(
     categoriesFor(kind).map((value) => ({ value, text: categories[value].label })),
   );
@@ -303,27 +306,32 @@
     <section>
       <div class="heading-row">
         <h2>Known values</h2>
-        <Button variant="text" iconType="left" onclick={openDialog}>
+        <Button variant="text" iconType="left" onclick={() => (adding = true)}>
           <Icon icon={iconAdd} />
           Add value
         </Button>
       </div>
       <p class="hint">
-        {isDebt ? "Outstanding balances" : "Exact values"} you know on specific dates, such as from a statement.
-        Estimates are projected from the most recent one.
+        {isDebt
+          ? "Balances you know on specific dates, such as from a statement, and payments you've made."
+          : "Values you know on specific dates, such as from a statement, and money you've paid in."}
+        Estimates are projected forward from them.
       </p>
+      {#if errors.snapshots}
+        <p class="error">The oldest entry must be a balance, for the payments to come off.</p>
+      {/if}
       {#if ordered.length == 0}
         <p class="none">No values yet. Add at least one to include this item in your net worth.</p>
       {:else}
         <div class="list">
           {#each ordered as snap (snap.id)}
-            <ListItem headline={money(snap.value)} supporting={dateLong(snap.date)}>
+            <ListItem headline={entryAmount(snap)} supporting={entryLabel(snap)}>
               {#snippet trailing()}
                 <Button
                   variant="text"
                   iconType="full"
                   onclick={() => askRemove(snap)}
-                  aria-label={`Remove value from ${dateLong(snap.date)}`}
+                  aria-label={`Remove ${entryAmount(snap)} from ${dateLong(snap.date)}`}
                 >
                   <Icon icon={iconDelete} />
                 </Button>
@@ -342,29 +350,13 @@
   {/snippet}
 </Sheet>
 
-<Dialog headline="Add a known value" bind:open={dialogOpen}>
-  <div class="dialog">
-    <DateField label="Date" bind:value={draftDate} max={todayIso()} datePickerTitle="Pick a date" />
-    <TextField label={isDebt ? "Balance owed (£)" : "Value (£)"} bind:value={draftValue}
-      inputmode="decimal"
-      onkeydown={(e) => {
-        // preventDefault stops the Enter from also "clicking" Add value once focus returns to it.
-        if (e.key == "Enter") {
-          e.preventDefault();
-          addSnapshot();
-        }
-      }}
-    />
-  </div>
-  {#snippet buttons()}
-    <Button variant="text" onclick={() => (dialogOpen = false)}>Cancel</Button>
-    <Button variant="text" disabled={!draftOk} onclick={addSnapshot}>Add</Button>
-  {/snippet}
-</Dialog>
+{#if adding}
+  <AddValueSheet {kind} {snapshots} onadd={addEntry} onclose={() => (adding = false)} />
+{/if}
 
 <Dialog headline="Remove this value?" bind:open={confirmOpen}>
   {#if pendingRemove}
-    {money(pendingRemove.value)} on {dateLong(pendingRemove.date)} will be removed when you save.
+    {entryAmount(pendingRemove)} on {dateLong(pendingRemove.date)} will be removed when you save.
   {/if}
   {#snippet buttons()}
     <Button variant="text" onclick={() => (confirmOpen = false)}>Cancel</Button>
@@ -463,11 +455,5 @@
     display: flex;
     flex-direction: column;
     margin-inline: -1rem;
-  }
-  .dialog {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding-top: 0.5rem;
   }
 </style>
