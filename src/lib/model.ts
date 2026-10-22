@@ -154,11 +154,6 @@ export const itemRange = (item: Item, date: string): Range | undefined => {
   return { low: Math.min(a, b), high: Math.max(a, b) };
 };
 
-/** Whether the item's value on `date` is projected rather than known on that exact day. */
-export const isProjected = (item: Item, date: string) => {
-  return item.snapshots.length > 0 && !item.snapshots.some((s) => s.date == date);
-};
-
 /** Net worth range: best-case assets minus best-case debts, and vice versa. */
 export const netWorthRange = (items: Item[], date: string): Range => {
   let low = 0;

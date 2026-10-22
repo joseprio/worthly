@@ -1,5 +1,5 @@
 <script module lang="ts">
-  export type Segment = { id: string; label: string; low: number; high: number; projected?: boolean };
+  export type Segment = { id: string; label: string; low: number; high: number };
 </script>
 
 <script lang="ts">
@@ -11,7 +11,6 @@
     low,
     high,
     date,
-    projected = false,
     caption = "Net worth",
     active = $bindable(),
   }: {
@@ -20,8 +19,6 @@
     low: number;
     high: number;
     date: string;
-    /** Any value is projected: show an approximate midpoint instead of the range. */
-    projected?: boolean;
     caption?: string;
     active?: string;
   } = $props();
@@ -35,6 +32,8 @@
   const MIN_W = 3; // thinnest a ring may get, so a tiny total stays visible
 
   const mid = (s: Segment) => (s.low + s.high) / 2;
+  /** Half the width of a range, rounded like the money it's shown as. */
+  const spread = (low: number, high: number) => Math.round((high - low) / 2);
   const bySize = (list: Segment[]) => [...list].sort((a, b) => mid(b) - mid(a));
 
   const assetTotal = $derived(assets.reduce((t, s) => t + mid(s), 0));
@@ -163,11 +162,17 @@
     {#if activeSeg}
       <span class="caption">{activeSeg.label}</span>
       {@const sign = activeIsDebt ? "−" : ""}
-      <span class="value">{activeSeg.projected ? "~" : ""}{sign}{money(mid(activeSeg))}</span>
+      <span class="value">{sign}{money(mid(activeSeg))}</span>
+      {#if spread(activeSeg.low, activeSeg.high) > 0}
+        <span class="caption">±{money(spread(activeSeg.low, activeSeg.high))}</span>
+      {/if}
       <span class="caption">{share}</span>
     {:else}
       <span class="caption">{caption}</span>
-      <span class="value">{projected ? "~" : ""}{money((low + high) / 2)}</span>
+      <span class="value">{money((low + high) / 2)}</span>
+      {#if spread(low, high) > 0}
+        <span class="caption">±{money(spread(low, high))}</span>
+      {/if}
       <span class="caption">{dateShort(date)}</span>
     {/if}
   </div>
