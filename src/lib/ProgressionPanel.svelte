@@ -29,7 +29,7 @@
   } = $props();
 
   const horizons = [
-    { value: "0", text: "To today" },
+    { value: "0", text: "Historic" },
     { value: "1", text: "+1 yr" },
     { value: "5", text: "+5 yrs" },
     { value: "10", text: "+10 yrs" },
