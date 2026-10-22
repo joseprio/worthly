@@ -368,6 +368,8 @@
     flex-direction: column;
     align-items: flex-end;
     font-variant-numeric: tabular-nums;
+    /* Lines may break between "−" and "£", which splits a debt's sign from its amount. */
+    white-space: nowrap;
   }
   .spread {
     @apply --m3-label-medium;
