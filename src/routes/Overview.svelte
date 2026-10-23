@@ -277,6 +277,8 @@
     grid-auto-flow: column;
     grid-auto-columns: 100%;
     overflow-x: auto;
+    /* Otherwise overflow-x makes this auto too, and anything a pixel too tall scrolls vertically. */
+    overflow-y: hidden;
     scroll-snap-type: x mandatory;
     overscroll-behavior-x: contain;
     scrollbar-width: none;

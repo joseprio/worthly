@@ -125,7 +125,8 @@
   );
 </script>
 
-<div class="donut">
+<!-- Holding a finger on a slice highlights it; don't let that become a long-press menu. -->
+<div class="donut" oncontextmenu={(e) => e.preventDefault()}>
   <svg viewBox="0 0 {SIZE} {SIZE}" role="img" aria-label={summary}>
     {#if outer.length == 0 && inner.length == 0}
       <!-- Nothing to show (e.g. filtered to items without values): keep the donut's outline. -->
@@ -182,6 +183,9 @@
     width: min(100%, 17rem);
     aspect-ratio: 1;
     margin-inline: auto;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
   svg {
     display: block;

@@ -87,7 +87,8 @@
   const marked = $derived(focus ? hf : hp);
 </script>
 
-<div class="chart" bind:clientWidth={width}>
+<!-- Holding a finger on the chart reads it; don't let that become a long-press menu. -->
+<div class="chart" bind:clientWidth={width} oncontextmenu={(e) => e.preventDefault()}>
   <svg
     {width}
     {height}
@@ -165,6 +166,8 @@
     position: relative;
     width: 100%;
     user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
   svg {
     display: block;
